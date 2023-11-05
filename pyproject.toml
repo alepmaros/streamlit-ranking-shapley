@@ -2,7 +2,7 @@
 name = "streamlit-ranking-shapley"
 version = "0.1.0"
 description = ""
-authors = ["Alexandre Maros <alehstk@gmail.com>"]
+authors = ["Alexandre Maros"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
