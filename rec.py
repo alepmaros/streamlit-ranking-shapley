@@ -1,39 +1,31 @@
-import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, JsCode
-
 import pandas as pd
-
+import shap
+import streamlit as st
 from sklearn.datasets import load_diabetes
 from sklearn.ensemble import RandomForestRegressor
-
+from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, JsCode
 from streamlit_shap import st_shap
-import shap
 
-st.text_input("Seed", value=1, key="seed")
-
-if st.button("Send request", key="send_request"):
-    data = load_diabetes()
-
-    df = pd.DataFrame(data["data"], columns=data["feature_names"])
-    df["target"] = data["target"]
-
-    X_sample = df.sample(5, random_state=int(st.session_state.seed)).drop("target", axis=1)
+# Utility Functions
+if "clicked" not in st.session_state:
+    st.session_state.clicked = False
 
 
-    df = df.drop(X_sample.index)
-
-    y = df["target"]
-    X = df.drop("target", axis=1)
-
-    model = RandomForestRegressor(random_state=int(st.session_state.seed))
-    model.fit(X, y)
+def click_button():
+    st.session_state.clicked = True
 
 
-    X_sample["prediction"] = model.predict(X_sample)
+def reset_click():
+    st.session_state.clicked = False
 
-    st.write("Prediction dataframe:")
 
-    render_image = JsCode("""
+@st.cache_data
+def get_data():
+    return load_diabetes()
+
+
+render_image = JsCode(
+    """
     class ThumbnailRenderer {
         init(params) {
             this.eGui = document.createElement('img');
@@ -45,8 +37,33 @@ if st.button("Send request", key="send_request"):
             return this.eGui;
         }
     }
-    """)
+"""
+)
 
+st.text_input("Seed", value=1, key="seed", on_change=reset_click)
+st.button("Send request", on_click=click_button)
+
+if st.session_state.clicked:
+    data = get_data()
+
+    df = pd.DataFrame(data["data"], columns=data["feature_names"])
+    df["target"] = data["target"]
+
+    X_sample = df.sample(5, random_state=int(st.session_state.seed)).drop(
+        "target", axis=1
+    )
+
+    df = df.drop(X_sample.index)
+
+    y = df["target"]
+    X = df.drop("target", axis=1)
+
+    model = RandomForestRegressor(random_state=int(st.session_state.seed))
+    model.fit(X, y)
+
+    X_sample["prediction"] = model.predict(X_sample)
+
+    st.write("Prediction dataframe:")
 
     X_sample["photo"] = "https://i.imgur.com/MYmm7E1.jpeg"
     cols = X_sample.columns.to_list()
@@ -65,18 +82,21 @@ if st.button("Send request", key="send_request"):
         gridOptions=gridOptions,
         data_return_mode=DataReturnMode.AS_INPUT,
         allow_unsafe_jscode=True,
-        theme='streamlit'
+        theme="streamlit",
     )
 
-    selected = grid_response['selected_rows']
+    selected = grid_response["selected_rows"]
 
     Xplainer = X_sample.drop(["prediction", "photo"], axis=1)
     explainer = shap.Explainer(model.predict, Xplainer)
     shap_values = explainer(Xplainer)
 
-    print(shap_values)
-
     if selected:
-        st_shap(shap.plots.waterfall(shap_values[int(selected[0]["_selectedRowNodeInfo"]["nodeId"])]), width=700)
+        st_shap(
+            shap.plots.waterfall(
+                shap_values[int(selected[0]["_selectedRowNodeInfo"]["nodeId"])]
+            ),
+            width=700,
+        )
 
     st_shap(shap.plots.beeswarm(shap_values), width=700)
